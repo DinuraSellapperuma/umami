@@ -18,6 +18,10 @@ jobs:
     name: Build & Push to GHCR
     runs-on: ubuntu-latest
 
+    permissions: # 👈 required for GHCR
+      contents: read
+      packages: write
+
     strategy:
       matrix:
         db-type: [postgresql, mysql]
@@ -37,15 +41,19 @@ jobs:
       - name: Generate tags
         run: |
           echo "TAG_PATCH=${{ matrix.db-type }}-${VERSION}" >> $GITHUB_ENV
-          echo "TAG_MINOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1,2)" >> $GITHUB_ENV || true
-          echo "TAG_MAJOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1)" >> $GITHUB_ENV || true
           echo "TAG_LATEST=${{ matrix.db-type }}-latest" >> $GITHUB_ENV
+          
+          # only set minor/major if version looks semantic (x.y.z)
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+ ]]; then
+            echo "TAG_MINOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1,2)" >> $GITHUB_ENV
+            echo "TAG_MAJOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1)" >> $GITHUB_ENV
+          fi
 
-      - uses: mr-smithers-excellent/docker-build-push@v6
-        name: Build & Push to GHCR
+      - name: Build & Push Docker image
+        uses: mr-smithers-excellent/docker-build-push@v6
         with:
           image: ghcr.io/${{ github.repository_owner }}/umami
-          tags: ${{ env.TAG_PATCH }},${{ env.TAG_MINOR }},${{ env.TAG_MAJOR }},${{ env.TAG_LATEST }}
+          tags: ${{ env.TAG_PATCH }},${{ env.TAG_MINOR || '' }},${{ env.TAG_MAJOR || '' }},${{ env.TAG_LATEST }}
           buildArgs: DATABASE_TYPE=${{ matrix.db-type }}
           registry: ghcr.io
           multiPlatform: true
