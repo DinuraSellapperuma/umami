@@ -1,0 +1,54 @@
+name: Build and Push Docker Images (GHCR)
+
+on:
+  push:
+    branches:
+      - main
+      - cloud
+      - analytics
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (optional)"
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        db-type: [postgresql, mysql]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_SHA::7}" >> $GITHUB_ENV
+          fi
+
+      - name: Generate tags
+        run: |
+          echo "TAG_PATCH=${{ matrix.db-type }}-${VERSION}" >> $GITHUB_ENV
+          echo "TAG_MINOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1,2)" >> $GITHUB_ENV || true
+          echo "TAG_MAJOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1)" >> $GITHUB_ENV || true
+          echo "TAG_LATEST=${{ matrix.db-type }}-latest" >> $GITHUB_ENV
+
+      - uses: mr-smithers-excellent/docker-build-push@v6
+        name: Build & Push to GHCR
+        with:
+          image: ghcr.io/${{ github.repository_owner }}/umami
+          tags: ${{ env.TAG_PATCH }},${{ env.TAG_MINOR }},${{ env.TAG_MAJOR }},${{ env.TAG_LATEST }}
+          buildArgs: DATABASE_TYPE=${{ matrix.db-type }}
+          registry: ghcr.io
+          multiPlatform: true
+          platform: linux/amd64,linux/arm64
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
