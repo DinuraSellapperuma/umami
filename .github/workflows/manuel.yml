@@ -41,24 +41,14 @@ jobs:
           echo "TAG_MAJOR=${{ matrix.db-type }}-$(echo ${VERSION} | cut -d. -f1)" >> $GITHUB_ENV || true
           echo "TAG_LATEST=${{ matrix.db-type }}-latest" >> $GITHUB_ENV
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v2
+      - uses: mr-smithers-excellent/docker-build-push@v6
+        name: Build & Push to GHCR
         with:
+          image: ghcr.io/${{ github.repository_owner }}/umami
+          tags: ${{ env.TAG_PATCH }},${{ env.TAG_MINOR }},${{ env.TAG_MAJOR }},${{ env.TAG_LATEST }}
+          buildArgs: DATABASE_TYPE=${{ matrix.db-type }}
           registry: ghcr.io
+          multiPlatform: true
+          platform: linux/amd64,linux/arm64
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }} 
-
-      - name: Build & Push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            DATABASE_TYPE=${{ matrix.db-type }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/umami:${{ env.TAG_PATCH }}
-            ghcr.io/${{ github.repository_owner }}/umami:${{ env.TAG_MINOR }}
-            ghcr.io/${{ github.repository_owner }}/umami:${{ env.TAG_MAJOR }}
-            ghcr.io/${{ github.repository_owner }}/umami:${{ env.TAG_LATEST }}
+          password: ${{ secrets.GITHUB_TOKEN }}
